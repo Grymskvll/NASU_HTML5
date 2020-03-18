@@ -1,0 +1,1044 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<meta charset="utf-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+	<!-- <title>nasu</title> -->
+</head>
+<style>
+	canvas {
+		border:1px solid #d3d3d3;
+		/* background-color: #FFF; */
+		padding: 0;
+		margin: auto;
+		display: block;
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		left: 0;
+		right: 0;
+	}
+	body {
+		background-color: #000;
+		color: #CC0000;
+		font-size: 10pt;
+		font-family: "Courier New",Courier,mono;
+	}
+</style>
+<body>
+	This is an unofficial port of the mini-game NASU included in the game ゆめにっき (Yume Nikki).<br>
+	This version is intended to be as faithful to the original as possible, except for the following fixes:
+	<ul>
+		<li>The red bonus eggplant should no longer sometimes be invisible.</li>
+		<li>The player-character should no longer sometimes seem to stumble and move slowly.</li>
+		<li>Inputs should no longer be lost if you press several buttons at the same time.</li>
+	</ul>
+</body>
+
+<script src="pixi.min.js"></script>
+<script src="pixi-sound.js"></script>
+
+
+
+<script>
+// If the quality of this code is poor, it is solely the fault of this port's author.
+
+//  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄         ▄ 
+// ▐░░▌      ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
+// ▐░▌░▌     ▐░▌▐░█▀▀▀▀▀▀▀█░▌▐░█▀▀▀▀▀▀▀█░▌▐░▌       ▐░▌
+// ▐░▌▐░▌    ▐░▌▐░▌       ▐░▌▐░▌        ▀ ▐░▌       ▐░▌
+// ▐░▌ ▐░▌   ▐░▌▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄▄▄ ▐░▌       ▐░▌
+// ▐░▌  ▐░▌  ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
+// ▐░▌   ▐░▌ ▐░▌▐░█▀▀▀▀▀▀▀█░▌ ▀▀▀▀▀▀▀▀▀█░▌▐░▌       ▐░▌
+// ▐░▌    ▐░▌▐░▌▐░▌       ▐░▌ ▄        ▐░▌▐░▌       ▐░▌
+// ▐░▌     ▐░▐░▌▐░▌       ▐░▌▐░█▄▄▄▄▄▄▄█░▌▐░█▄▄▄▄▄▄▄█░▌
+// ▐░▌      ▐░░▌▐░▌       ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌
+//  ▀        ▀▀  ▀         ▀  ▀▀▀▀▀▀▀▀▀▀▀  ▀▀▀▀▀▀▀▀▀▀▀ 
+
+"use strict";
+
+PIXI.settings.SCALE_MODE = 0
+const VOLUME_SCALE = 0.2
+const COOKIE_EXP = 10000
+const X_RES_NATIVE = 320
+const Y_RES_NATIVE = 240
+const app = new PIXI.Application({
+	width:	X_RES_NATIVE,
+	height:	Y_RES_NATIVE,
+	backgroundColor: 0x000000,
+});
+document.body.appendChild(app.view);
+// app.ticker.maxFPS = 60		// FIXME: 
+
+
+function setCookie(cname, cvalue, exdays) {
+	var d = new Date();
+	d.setTime(d.getTime() + (exdays * 24 * 60 * 60 * 1000));
+	var expires = "expires="+d.toUTCString();
+	document.cookie = cname + "=" + cvalue + ";" + expires + ";path=/";
+}
+
+
+function getCookie(cname) {
+	var name = cname + "=";
+	var ca = document.cookie.split(';');
+	for(var i = 0; i < ca.length; i++) {
+		var c = ca[i];
+		while (c.charAt(0) == ' ') {
+			c = c.substring(1);
+		}
+		if (c.indexOf(name) == 0) {
+			return c.substring(name.length, c.length);
+		}
+	}
+	return "";
+}
+
+
+// RPG2003 RNG is inclusive on both ends
+function rand_range(min, max, max_inc=true) {
+	max_inc = Number(max_inc)
+	return Math.floor(Math.random() * (max + max_inc - min)) + min
+}
+
+
+const loader = PIXI.Loader.shared;
+app.loader
+	.add('points_1000', "Picture/【G】1000点.png")
+	.add('points_10', "Picture/【G】10点.png")
+	.add('points_300', "Picture/【G】300点.png")
+	.add('border', "Picture/【G】枠.png")
+	.add('black', "Picture/【G】黒画面.png")
+	.add('game_over', "Picture/【G１】GAME　OVER.png")
+	.add('ready', "Picture/【G１】READY.png")
+	.add('start', "Picture/【G１】START.png")
+	.add('nasu', "Picture/【G１】なす.png")
+	.add('title', "Picture/【G１】タイトル.png")
+	.add('hero_walk_right_1', "Picture/【G１】主人公右歩き１.png")
+	.add('hero_walk_right_1_nasu', "Picture/【G１】主人公右歩き１（なす）.png")
+	.add('hero_walk_right_2', "Picture/【G１】主人公右歩き２.png")
+	.add('hero_walk_right_2_nasu', "Picture/【G１】主人公右歩き２（なす）.png")
+	.add('hero_stand_right', "Picture/【G１】主人公右立ち.png")
+	.add('hero_stand_right_nasu', "Picture/【G１】主人公右立ち（なす）.png")
+	.add('hero_jump_right', "Picture/【G１】主人公右ｼﾞｬﾝﾌﾟ.png")
+	.add('hero_jump_right_nasu', "Picture/【G１】主人公右ｼﾞｬﾝﾌﾟ（なす）.png")
+	.add('hero_walk_left_1', "Picture/【G１】主人公左歩き１.png")
+	.add('hero_walk_left_1_nasu', "Picture/【G１】主人公左歩き１（なす）.png")
+	.add('hero_walk_left_2', "Picture/【G１】主人公左歩き２.png")
+	.add('hero_walk_left_2_nasu', "Picture/【G１】主人公左歩き２（なす）.png")
+	.add('hero_stand_left', "Picture/【G１】主人公左立ち.png")
+	.add('hero_stand_left_nasu', "Picture/【G１】主人公左立ち（なす）.png")
+	.add('hero_jump_left', "Picture/【G１】主人公左ｼﾞｬﾝﾌﾟ.png")
+	.add('hero_jump_left_nasu', "Picture/【G１】主人公左ｼﾞｬﾝﾌﾟ（なす）.png")
+	.add('score_0', "Picture/【G１】数字０.png")
+	.add('score_1', "Picture/【G１】数字１.png")
+	.add('score_2', "Picture/【G１】数字２.png")
+	.add('score_3', "Picture/【G１】数字３.png")
+	.add('score_4', "Picture/【G１】数字４.png")
+	.add('score_5', "Picture/【G１】数字５.png")
+	.add('score_6', "Picture/【G１】数字６.png")
+	.add('score_7', "Picture/【G１】数字７.png")
+	.add('score_8', "Picture/【G１】数字８.png")
+	.add('score_9', "Picture/【G１】数字９.png")
+	.add('bg_1', "Picture/【G１】背景.png")
+	.add('bg_2', "Picture/【G１】背景2.png")
+	.add('nasu_red', "Picture/【G１】赤なす.png")
+	.add('bgm_title', "Music/【G1】タイトル.WAV")
+	.add('bgm_game', "Music/【G1】マップ.WAV")
+	.add('bgm_game_over', "Sound/GAME_OVER.wav")
+	.add('sfx_drop', "Sound/drop.wav")
+	.add('sfx_nasu_mode', "Sound/drop.wav")		// Redundant but ok
+	.add('sfx_jump', "Sound/jump.wav")
+	.add('sfx_land', "Sound/land.wav")
+	.add('sfx_steppy_1', "Sound/steppy1.wav")
+	.add('sfx_steppy_2', "Sound/steppy2.wav")
+	.add('sfx_GET', "Sound/GET.wav")
+	.add('sfx_double', "Sound/double.wav")
+	.load(onAssetsLoaded);
+
+
+function make_wait() {
+	function wait(frame_count, fn) {
+		let entry = {
+			cur: 0,
+			end: frame_count,
+			fn: fn,
+		}
+		wait.ing.push(entry)
+
+		if (!wait.ticking) {
+			app.ticker.add(wait.a_frame)
+			wait.ticking = true
+		}
+	}
+
+	// init
+	wait.ing = []
+	wait.a_frame = function() {
+		let del = []
+		if (wait.ing.length == 0) {
+			app.ticker.remove(wait.a_frame)
+			wait.ticking = false
+			return
+		}
+		for (let i=wait.ing.length-1; i>=0; i--) {
+			let entry = wait.ing[i]
+			entry.cur++
+			if (entry.cur == entry.end) {
+				entry.fn()
+				wait.ing.splice(i, 1);
+			}
+		}
+	}
+	return wait
+}
+const wait = make_wait()
+
+
+var game_master = {
+	cookie_name: "nasu_highscore",
+	nasu_mode: false,
+	// nasu_mode: true,
+	// god_mode: true,
+	score: 0,
+	high_score: 0,			// Load at init
+	scale_native: true,	// Toggled to max scale at init
+	scale_max: 1,
+	
+	init: function() {
+		this.high_score = Number(getCookie(this.cookie_name))
+		this.toggle_native_res()
+		key_man.reg(KEY.PRESS, function(key_code) {
+			if (key_code == 70) { game_master.toggle_native_res() }
+			else if (key_code == 82) { game_master.toggle_fullscreen() }
+		})
+		window.onresize = this.update_res
+
+		app.view.addEventListener('dblclick', function (e) {
+			game_master.toggle_fullscreen()
+		});
+	},
+	score_update: function(points) {
+		this.score = points
+		if (!this.nasu_mode) {
+			this.high_score = Math.max(points, this.high_score)
+			setCookie(this.cookie_name, this.high_score, COOKIE_EXP)
+		}
+	},
+	update_scale_max: function() {
+		let c_width		= document.documentElement.clientWidth
+		let c_height	= document.documentElement.clientHeight
+		let max_scale_x	= Math.floor(c_width/X_RES_NATIVE)
+		let max_scale_y	= Math.floor(c_height/Y_RES_NATIVE)
+		let max_scale	= Math.min(max_scale_x, max_scale_y)
+		game_master.scale_max	= Math.max(max_scale, 1)
+	},
+	update_res: function() {
+		game_master.update_scale_max()
+		let scale = game_master.scale_native ? 1 : game_master.scale_max
+		app.stage.scale.x = scale
+		app.stage.scale.y = scale
+		let w = X_RES_NATIVE * scale
+		let h = Y_RES_NATIVE * scale
+		app.renderer.resize(w, h)	// FIXME:
+	},
+	toggle_native_res: function() {
+		game_master.scale_native = !game_master.scale_native
+		game_master.update_res()
+	},
+
+	// FIXME:
+	toggle_fullscreen: function() {
+  		let elem = document.body
+		if (!document.fullscreenElement) {
+			elem.requestFullscreen().catch(err => {
+			alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
+		});
+		} else {
+			document.exitFullscreen();
+		}
+	},
+}
+
+var screen_TITLE = {
+	init: function() {
+		this.container	= new PIXI.Container()
+		this.key_queue	= []
+		this.title		= PIXI.Sprite.from("title")
+		this.title.anchor.set(0.5);
+		this.title.x 	= 160
+		this.title.y 	= 112
+		this.container.addChild(this.title)
+		let score_x		= 173
+		let score_y		= 145
+		this.score		= new score(this.container, score_x, score_y)
+
+		this.bgm = PIXI.sound.Sound.from({
+			url: app.loader.resources.bgm_title,	// FIXME:
+			volume: 0.5 * VOLUME_SCALE,
+			loop: true,
+		});
+		this.sfx_nasu_mode = PIXI.sound.Sound.from({
+			url: app.loader.resources.sfx_nasu_mode,	// FIXME:
+			volume: 0.6 * VOLUME_SCALE,
+		});
+	},
+	show: function() {
+		game_master.nasu_mode = false
+		this.score.set(game_master.high_score)
+		app.stage.addChild(this.container)
+		this.bgm.play()
+		key_man.reg(KEY.DOWN, this._check_key)
+	},
+	hide: function() {
+		app.stage.removeChild(this.container)
+		this.bgm.stop()
+		key_man.unreg(KEY.DOWN, this._check_key)
+	},
+	finished: function() {
+		this.hide()
+		screen_TRANSIT.show()
+	},
+	_check_key: function(key_code) {
+		const confirm_codes	= [13, 32, 90]	// [enter, space, Z] to start game
+		if (confirm_codes.includes(key_code)) {
+			screen_TITLE.finished()
+		}
+		
+		// Nasu mode: [left, left, right, right, up, down, up, down]
+		const nasu_mode_seq		= [37, 37, 39, 39, 38, 40, 38, 40]
+		const nasu_mode_valid	= [37, 38, 39, 40]	// Ignore keys other than arrows
+		if (game_master.nasu_mode == false
+		&& nasu_mode_valid.includes(key_code)) {
+			screen_TITLE.key_queue.push(key_code)
+			while (screen_TITLE.key_queue.length > nasu_mode_seq.length) {
+				screen_TITLE.key_queue.shift()
+			}
+			if (screen_TITLE.key_queue.toString() == nasu_mode_seq.toString()) {
+				game_master.nasu_mode = true
+				screen_TITLE.sfx_nasu_mode.play()
+			}
+		}
+	},
+}
+
+
+var screen_TRANSIT = {
+	init: function() {
+		// this.container	= new PIXI.Container()	// This screen is just one sprite
+		this.text_ready	= PIXI.Sprite.from("ready")
+		set_anchor(this.text_ready)
+		this.text_ready.x = 160
+		this.text_ready.y = 112
+	},
+	show: function() {
+		app.stage.addChild(this.text_ready)
+		wait(90, () => app.stage.removeChild(this.text_ready) )
+		wait(96, () => this.finished() )
+	},
+	// hide: function() {},
+	finished: function() {
+		// this.hide()
+		screen_GAME.show()
+	},
+}
+
+
+function nasu(x=160, y=0) {
+	let that = this
+	let x_min 	= 80		// x_min and x_max are both inclusive
+	let x_max 	= 234
+	let y_limit	= 160
+	let y_speed	= 1
+	this.sprite = PIXI.Sprite.from("nasu")
+	set_anchor(this.sprite)
+	this.sprite.x = x
+	this.sprite.y = y
+
+	this.spawn = function(x=160, y=0) {
+		this.sprite.x = x
+		this.sprite.y = y
+		update.reg(this.update)
+		screen_GAME.container.addChild(this.sprite)
+	}
+
+	this.respawn = function() {
+		let x = rand_range(x_min, x_max)
+		let y = 0
+		this.sprite.x = x
+		this.sprite.y = y
+	}
+
+	this.stop = function() {
+		update.unreg(that.update)
+	}
+
+	this.despawn = function() {
+		this.stop()
+		screen_GAME.container.removeChild(this.sprite)
+	}
+
+	this.update = function() {
+		that.sprite.y += y_speed
+		if (that.sprite.y > y_limit) {
+			screen_GAME.drop()
+		}
+	}
+}
+
+function nasu_red() {
+	let that	= this
+	let x_start	= 60
+	let y_start	= 158
+	let x_max	= 260
+	let bounce_sequence_x = [
+		1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+		0, 0, 1, 0, 0, 0,
+		1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0, 1, 0,
+	]
+	let bounce_sequence_y = [
+		-2, -0, -2, -0, -2, -0, -2, -0, -2, -0, -1, -0, -1, -0, -1, -0, -0, -0, -0, -0, -1, -0, // Ascent
+		0, 0, 0, 0, 0, 0,																		// Zenith
+		+1, +0, +0, +0, +0, +0, +1, +0, +1, +0, +1, +0, +2, +0, +2, +0, +2, +0, +2, +0, +2, +0, // Descent
+	]
+	this.sprite = PIXI.Sprite.from("nasu_red")
+	set_anchor(this.sprite)
+
+	this.spawn = function() {
+		this.spawned = true
+		this.sprite.x = x_start
+		this.sprite.y = y_start
+		this.bounce_frame = 0
+		update.reg(this.update)
+		screen_GAME.container.addChild(this.sprite)
+	}
+
+	this.stop = function() {
+		update.unreg(that.update)
+	}
+
+	this.despawn = function() {
+		this.stop()
+		this.spawned = false
+		screen_GAME.container.removeChild(this.sprite)
+	}
+
+	this.update = function() {
+		that.sprite.x += bounce_sequence_x[that.bounce_frame]
+		that.sprite.y += bounce_sequence_y[that.bounce_frame]
+		that.bounce_frame++
+		if (that.bounce_frame >= bounce_sequence_x.length) {
+			that.bounce_frame = 0
+		}
+		if (that.sprite.x >= x_max) {
+			that.despawn()
+		}
+	}
+}
+
+
+function set_anchor(sprite) {
+	let w = sprite.width
+	let h = sprite.height
+	let x_anchor = Math.floor(w/2)/w
+	let y_anchor = Math.floor(h/2)/h
+	sprite.anchor.set(x_anchor, y_anchor)
+}
+
+
+function hero() {
+	let that		= this
+	let x_min		= 70
+	let x_max		= 244
+	this.sprite 	= new PIXI.Sprite()
+	this.hit_rect_width		= 6
+	this.hit_rect_height	= 6
+
+	const jump_codes = [13, 32, 90]
+	const jump_sequence = [
+		-2, -2, -2, -2, -2, -1, -1, -1, -0, -0, -1,		// Ascent
+		0, 0, 0,										// Zenith
+		+1, +0, +0, +1, +1, +1, +2, +2, +2, +2, +2,		// Descent
+	]
+
+	this.sfx_jump = PIXI.sound.Sound.from({
+		url: app.loader.resources.sfx_jump,	// FIXME:
+		volume: 0.3 * VOLUME_SCALE,
+	});
+	this.sfx_land = PIXI.sound.Sound.from({
+		url: app.loader.resources.sfx_land,	// FIXME:
+		volume: 0.4 * VOLUME_SCALE,
+	});
+	this.sfx_steppy_1 = PIXI.sound.Sound.from({
+		url: app.loader.resources.sfx_steppy_1,	// FIXME:
+		volume: 0.4 * VOLUME_SCALE,
+	});
+	this.sfx_steppy_2 = PIXI.sound.Sound.from({
+		url: app.loader.resources.sfx_steppy_2,	// FIXME:
+		volume: 0.4 * VOLUME_SCALE,
+	});
+
+	this.get_tex = function() {
+		let texs = {
+			// nasu		left		jumping
+			true : {	true : {	true	: PIXI.Texture.from("hero_jump_left_nasu"),
+									false	: PIXI.Texture.from("hero_stand_left_nasu"),	},
+						false : {	true	: PIXI.Texture.from("hero_jump_right_nasu"),
+									false	: PIXI.Texture.from("hero_stand_right_nasu"),	},
+			},
+			false : {	true : {	true 	: PIXI.Texture.from("hero_jump_left"),
+									false 	: PIXI.Texture.from("hero_stand_left"),		},
+						false : {	true 	: PIXI.Texture.from("hero_jump_right"),
+									false 	: PIXI.Texture.from("hero_stand_right"),	},
+			},
+		}
+		let walk_texs = {
+			// nasu		left
+			true: {		true:	[	PIXI.Texture.from("hero_walk_left_1_nasu"),
+									PIXI.Texture.from("hero_walk_left_2_nasu"),		],
+						false:	[	PIXI.Texture.from("hero_walk_right_1_nasu"),
+									PIXI.Texture.from("hero_walk_right_2_nasu"),	],
+			},
+			false: {	true: 	[	PIXI.Texture.from("hero_walk_left_1"),
+									PIXI.Texture.from("hero_walk_left_2"),	],
+						false:	[	PIXI.Texture.from("hero_walk_right_1"),
+									PIXI.Texture.from("hero_walk_right_2"),	],
+			},
+		}
+		if (this.moving && !this.jumping) {
+			return walk_texs[game_master.nasu_mode][this.facing_left][this.walk_frame_anim]
+		} else {
+			return texs[game_master.nasu_mode][this.facing_left][this.jumping]
+		}
+		return texy
+	}
+
+	this.spawn = function() {
+		this.facing_left = true
+		this.jumping = false
+		this.jump_released = true
+		this.moving = false
+		this.moving_left = false
+		this.sprite.texture	= this.get_tex()
+		set_anchor(this.sprite)
+
+		this.sprite.x = 160
+		this.sprite.y = 150
+		this.walk_frame = 0
+		this.walk_frame_anim = 0
+		this.jump_frame = 0
+		screen_GAME.container.addChild(this.sprite)
+		key_man.reg(KEY.PRESS, this.jump_press)
+		key_man.reg(KEY.UP, this.key_release)
+		update.reg(this.update)
+	}
+
+	this.despawn = function() {
+		this.stop()
+		screen_GAME.container.removeChild(this.sprite)
+	}
+
+	this.stop = function() {
+		key_man.unreg(KEY.PRESS, this.jump_press)
+		key_man.unreg(KEY.UP, this.key_release)
+		update.unreg(this.update)
+	}
+
+	this.jump_press = function(key_code) {
+		if (jump_codes.includes(key_code)
+		&& that.jumping == false
+		&& that.jump_released == true) {
+			that.jumping = true
+			that.jump_released = false
+			that.sprite.texture	= that.get_tex()
+			that.sfx_jump.play()
+		}
+	}
+	this.key_release = function(key_code) {
+		if (jump_codes.includes(key_code)) {
+			that.jump_released = true
+		}
+
+		if (key_man.keys
+		&& !key_man.keys[39]
+		&& !key_man.keys[37]
+		&& !that.jumping) {
+			that.moving = false
+			that.sprite.texture	= that.get_tex()
+		}
+	}
+
+	this._update_moving = function() {
+		// Horizontal movement
+		if (key_man.keys) {
+			if (key_man.keys[39]) {	// Right check (override Left check)
+				that.moving_left = false
+				that.moving = true
+				if (that.sprite.x < x_max) {
+					that.x_speed = 1
+				} else if (that.sprite.x == x_max) { 
+					that.x_speed = 0
+				}
+			} else if (key_man.keys[37]) {	// Left check
+				that.moving_left = true
+				that.moving = true
+				if (that.sprite.x > x_min) {
+					that.x_speed = -1
+				}
+			}
+		}
+	}
+
+	this._update_jumping = function() {
+		// Jump movement
+		if (that.jumping == true) {
+			that.y_speed = jump_sequence[that.jump_frame]
+			that.jump_frame++
+			if (that.jump_frame >= jump_sequence.length) {
+				that.jumping = false
+				that.jump_frame = 0
+				that.double_get = 0
+				that.walk_frame = 0
+				that.sprite.texture	= that.get_tex()
+				that.sfx_land.play()
+			}
+		}
+	}
+
+	this._update_facing = function() {
+		// Facing
+		let new_facing
+		if (that.moving == false || that.jumping) {
+			new_facing = that.facing_left
+			that.walk_frame = 0
+		} else {
+			new_facing = that.moving_left
+		}
+		if (new_facing != that.facing_left) {
+			that.walk_frame = 0
+			that.facing_left = new_facing
+			that.sprite.texture	= that.get_tex()
+		}
+	}
+
+	this._update_steppy = function() {
+		that.walk_frame %= 24	// 12 game frames for each animation frame
+		if (that.moving && !that.jumping) {
+			if (that.walk_frame == 0) {
+				that.walk_frame_anim = 0
+				that.sprite.texture	= that.get_tex()
+				that.sfx_steppy_1.play()
+			} else if (that.walk_frame == 12) {
+				that.walk_frame_anim = 1
+				that.sprite.texture	= that.get_tex()
+				that.sfx_steppy_2.play()
+			}
+			that.walk_frame++
+		}
+	}
+
+	this.update = function() {
+		that.x_speed = 0
+		that.y_speed = 0
+		that.moving = false
+
+		that._update_moving()
+		that._update_jumping()
+		that._update_facing()
+		that._update_steppy()
+
+		that.sprite.x += that.x_speed
+		that.sprite.y += that.y_speed
+	}
+}
+
+// it hurts
+var POINTS_10	= 10		
+var POINTS_300	= 300
+var POINTS_1000	= 1000
+function points(container, pointeroos) {
+	let points_data = {
+		[POINTS_10] : {
+			src : "points_10",
+			timeout : 30,
+		},
+		[POINTS_300] : {
+			src : "points_300",
+			timeout : 30,
+		},
+		[POINTS_1000] : {
+			src : "points_1000",
+			timeout : 90,
+		},
+	}
+	let that = this
+	this.container = container
+	this.sprite = PIXI.Sprite.from(points_data[pointeroos].src)
+	set_anchor(this.sprite)
+
+	this.spawn = function(x=160, y=112) {
+		this.sprite.x = x
+		this.sprite.y = y
+		this.container.addChild(this.sprite)
+		wait(points_data[pointeroos].timeout, this.despawn)
+	}
+	this.despawn = function() {
+		that.container.removeChild(that.sprite)
+	}
+}
+
+function score(container, x=160, y=120) {
+	let score_digits = 5
+	let dig_spacing = 8
+	let max_score = 0
+	for (let i=0; i<score_digits; i++) {
+		max_score += 9 * 10**i
+	}
+	let texs = [
+		PIXI.Texture.from("score_0"),
+		PIXI.Texture.from("score_1"),
+		PIXI.Texture.from("score_2"),
+		PIXI.Texture.from("score_3"),
+		PIXI.Texture.from("score_4"),
+		PIXI.Texture.from("score_5"),
+		PIXI.Texture.from("score_6"),
+		PIXI.Texture.from("score_7"),
+		PIXI.Texture.from("score_8"),
+		PIXI.Texture.from("score_9"),
+	]
+
+	this.points = 0
+	this.container = container
+	this.dig_container = new PIXI.Container()
+	this.container.addChild(this.dig_container)
+
+	this.digits = []
+	for (let i = 0; i < score_digits; i++) {
+		let dig = new PIXI.Sprite()
+		set_anchor(dig)
+		dig.x = x + (i * dig_spacing)
+		dig.y = y
+		this.digits.push(dig)
+		this.dig_container.addChild(dig)
+	}
+
+	this.set = function(value=0) {
+		this.points = value
+		this.update()
+	}
+	this.add = function(value) {
+		this.points += value
+		this.update()
+	}
+
+	this.update = function() {
+		// (Displayed) score gets capped at 99999
+		let s = Math.min(max_score, this.points).toString()
+		let score_str = ''
+		let pad = score_digits - s.length
+		for (let i = 0; i < pad; i++) {
+			score_str += '0'
+		}
+		score_str += s
+
+		for (let i = 0; i < this.digits.length; i++) {
+			let dig = this.digits[i]
+			dig.texture = texs[score_str[i]]
+		}
+	}
+}
+
+
+var screen_GAME = {
+	init: function() {
+		this.bg_tex = [
+			PIXI.Texture.from("bg_1"),
+			PIXI.Texture.from("bg_2"),
+		]
+		this.tick_tock	= false
+		this.container	= new PIXI.Container()
+		this.bg			= PIXI.Sprite.from(this.bg_tex[0])
+		this.bg.anchor.set(0.5);
+		this.bg.x = 160
+		this.bg.y = 112
+		this.container.addChild(this.bg)
+		this.bgm = PIXI.sound.Sound.from({
+			url: app.loader.resources.bgm_game,		// FIXME:
+			volume: 0.4 * VOLUME_SCALE,
+			loop: true,
+		});
+		this.sfx_drop = PIXI.sound.Sound.from({
+			url: app.loader.resources.sfx_drop,		// FIXME:
+			volume: 0.6 * VOLUME_SCALE,
+		});
+		this.sfx_GET = PIXI.sound.Sound.from({
+			url: app.loader.resources.sfx_GET,		// FIXME:
+			volume: 0.4 * VOLUME_SCALE,
+		});
+		this.sfx_double = PIXI.sound.Sound.from({
+			url: app.loader.resources.sfx_double,		// FIXME:
+			volume: 0.4 * VOLUME_SCALE,
+		});
+		this.text_start	= PIXI.Sprite.from("start")
+		set_anchor(this.text_start)
+		this.text_start.x = 160
+		this.text_start.y = 112
+		this.text_bonus = PIXI.Sprite.from("points_1000")
+		set_anchor(this.text_bonus)
+		this.text_bonus.x = 160
+		this.text_bonus.y = 112
+		this.nasu		= new nasu()
+		this.nasu_red	= new nasu_red()
+		this.hero		= new hero()
+		this.text_points_10		= new points(this.container, POINTS_10)
+		this.text_points_300	= new points(this.container, POINTS_300)
+		this.text_points_1000	= new points(this.container, POINTS_1000)
+		let score_x = 210
+		let score_y = 167
+		this.score		= new score(this.container, score_x, score_y)
+	},
+	GET_check: function(target) {
+		let x_min = screen_GAME.hero.sprite.x
+		let x_max = screen_GAME.hero.sprite.x + screen_GAME.hero.hit_rect_width
+		let y_min = screen_GAME.hero.sprite.y
+		let y_max = screen_GAME.hero.sprite.y + screen_GAME.hero.hit_rect_height
+
+		let x_col = x_min <= target.sprite.x && target.sprite.x <= x_max
+		let y_col = y_min <= target.sprite.y && target.sprite.y <= y_max
+
+		return screen_GAME.hero.jumping && x_col && y_col
+	},
+	update: function() {
+		if (screen_GAME.GET_check(screen_GAME.nasu)) {
+			screen_GAME.nasu.respawn()
+
+			let x = screen_GAME.hero.sprite.x
+			let y = screen_GAME.hero.sprite.y
+			screen_GAME.text_points_10.spawn(x, y)
+
+			screen_GAME.hero.double_get++
+			if (screen_GAME.nasu_red.spawned == false
+			&& (game_master.nasu_mode || (rand_range(1, 50) == 1))) {
+					screen_GAME.nasu_red.spawn()
+			}
+			if (screen_GAME.hero.double_get == 2) {
+				screen_GAME.score.add(1010)
+				screen_GAME.sfx_double.play()
+
+				let x = screen_GAME.hero.sprite.x
+				let y = screen_GAME.hero.sprite.y
+				screen_GAME.text_points_1000.spawn()
+			} else {
+				screen_GAME.score.add(10)
+				screen_GAME.sfx_GET.play()
+			}
+		}
+		// Catching two bonuses in the same jump might technically be possible.
+		// This should handle it the same way as the official NASU (no 1000 bonus).
+		if (screen_GAME.nasu_red.spawned
+		&& screen_GAME.GET_check(screen_GAME.nasu_red)) {
+			screen_GAME.nasu_red.despawn()
+
+ 			let x = screen_GAME.hero.sprite.x
+			let y = screen_GAME.hero.sprite.y
+			screen_GAME.text_points_300.spawn(x, y)
+
+			screen_GAME.hero.double_get++
+			if (screen_GAME.hero.double_get == 2) {
+				screen_GAME.score.add(1300)
+				screen_GAME.sfx_double.play()
+				let x = screen_GAME.hero.sprite.x
+				let y = screen_GAME.hero.sprite.y
+				screen_GAME.text_points_1000.spawn()
+			} else {
+				screen_GAME.score.add(300)
+				screen_GAME.sfx_GET.play()
+			}
+		}
+	},
+	show: function() {
+		this.score.set(0)
+		this.tick_tock = false
+		this.bg.texture = this.bg_tex[0]
+		this.container.addChild(this.text_start)
+		wait(60, this.hide_text_start)
+		app.stage.addChild(this.container)
+		this.bgm.play()
+		this.nasu.spawn()
+		this.hero.spawn()
+		update.reg(this.update)
+	},
+	hide_text_start: function() {
+		screen_GAME.container.removeChild(screen_GAME.text_start)
+	},
+	hide_text_bonus: function() {
+		screen_GAME.container.removeChild(screen_GAME.text_bonus)
+	},
+	hide: function() {
+		game_master.score_update(this.score.points)
+		this.nasu.despawn()
+		this.nasu_red.despawn()
+		this.hero.despawn()
+		app.stage.removeChild(this.container)
+		this.bgm.stop()
+		update.unreg(this.update)
+	},
+	drop: function() {
+		if (game_master.god_mode) {
+			this.nasu.respawn()
+			return
+		}
+		this.flash_count = 0
+		this.flash_bg()
+		wait(108, screen_GAME.finished)
+		this.bgm.stop()
+		this.sfx_drop.play()
+		this.nasu.stop()
+		this.nasu_red.stop()
+		this.hero.stop()
+	},
+	flash_bg: function() {
+		screen_GAME.flash_count++
+		screen_GAME.tick_tock = !screen_GAME.tick_tock
+		let bg_index = Number(screen_GAME.tick_tock)
+		screen_GAME.bg.texture = screen_GAME.bg_tex[bg_index]
+		if (screen_GAME.flash_count < 9) {
+			wait(6, screen_GAME.flash_bg)
+		}
+	},
+	finished: function() {
+		screen_GAME.hide()
+		screen_GAME_OVER.show()
+	},
+}
+
+
+var screen_GAME_OVER = {
+	init: function() {
+		this.container	= new PIXI.Container()
+		this.bgm		= PIXI.sound.Sound.from({
+			url: app.loader.resources.bgm_game_over,	// FIXME:
+			volume: 0.5 * VOLUME_SCALE,
+		});
+		this.text		= PIXI.Sprite.from("game_over")
+		set_anchor(this.text)
+		this.text.x = 160
+		this.text.y = 112
+		this.container.addChild(this.text)
+		let score_x = 210
+		let score_y = 167
+		this.score = new score(this.container, score_x, score_y)
+	},
+	show: function() {
+		this.score.set(game_master.score)
+		app.stage.addChild(this.container)
+		this.bgm.play()
+		wait(450, this.finished)
+	},
+	hide: function() {
+		app.stage.removeChild(this.container)
+		this.bgm.stop()
+	},
+	finished: function() {
+		screen_GAME_OVER.hide()
+		screen_TITLE.show()
+	},
+}
+
+
+const KEY = {	// enum
+	PRESS: "PRESS",
+	DOWN: "DOWN",
+	UP: "UP",
+}
+var key_man = {
+//	  O_/
+//	 /|
+//	 / \
+	keys:		[],
+	pending:	{},
+	handlers: {				// key_man refuses to use switch stataments.
+		[KEY.PRESS]:	[],	// He finds them unaesthetic.
+		[KEY.DOWN]:		[],
+		[KEY.UP]:		[],
+	},
+
+	init: function() {
+		window.addEventListener('keydown', this._down)
+		window.addEventListener('keyup', this._up)
+	},
+	reg: function(event, handler) {
+		if (!this.handlers[event].includes(handler)) {
+			this.handlers[event].push(handler)
+		}
+	},
+	unreg: function(event, handler) {
+		let index = this.handlers[event].indexOf(handler)
+		if (index > -1) {
+			this.handlers[event].splice(index, 1)
+		}
+	},
+
+	_down: function(e) {
+		key_man.keys[e.keyCode] = (e.type == "keydown");
+		for (let i=0; i<key_man.handlers[KEY.DOWN].length; i++) {
+			key_man.handlers[KEY.DOWN][i](e.keyCode)
+		}
+		if (!key_man.pending[e.keyCode]) {
+			for (let i=0; i<key_man.handlers[KEY.PRESS].length; i++) {
+				key_man.handlers[KEY.PRESS][i](e.keyCode)
+			}
+		}
+		key_man.pending[e.keyCode] = true
+	},
+	_up: function(e) {
+		key_man.pending[e.keyCode] = null
+		key_man.keys[e.keyCode] = (e.type == "keydown");
+		for (let i=0; i<key_man.handlers[KEY.UP].length; i++) {
+			key_man.handlers[KEY.UP][i](e.keyCode)
+		}
+	},
+}
+
+
+function onAssetsLoaded() {
+	key_man.init()
+	game_master.init()
+
+	screen_TITLE.init()
+	screen_TRANSIT.init()
+	screen_GAME.init()
+	screen_GAME_OVER.init()
+	screen_TITLE.show()
+
+	const border = PIXI.Sprite.from("border");
+	border.zIndex = 10
+	app.stage.addChild(border);
+	app.stage.sortableChildren = true
+
+	app.ticker.add(update)
+}
+
+
+function make_update() {
+	const update = function() {
+		update.sup.map((sup) => sup())
+	}
+	update.sup = []
+	update.reg = function(sup) {
+		if (!update.sup.includes(sup)) {
+			update.sup.push(sup)
+		}
+	}
+	update.unreg = function(sup) {
+		let index = update.sup.indexOf(sup)
+		if (index > -1) {
+			update.sup.splice(index, 1)
+		}
+	}
+	return update
+}
+var update = make_update()
+
+</script>
+</html>
