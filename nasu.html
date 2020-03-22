@@ -82,6 +82,22 @@
 	#working {
 		position: absolute;
 	}
+	
+	A {
+		text-decoration : none;
+	}
+	A:link {
+		color : #9999ff;
+	}
+	A:active {
+		color : #9999ff;
+	}
+	A:visited {
+		color : #666699;
+	}
+	A:hover {
+		color : #CCCC00;
+	}
 </style>
 <body>
 	<div id="main_content" tabindex="1">
@@ -109,7 +125,15 @@
 						<li>Inputs should no longer be lost if you press several buttons at the same time.</li>
 					</ul>
 					Press F or double-click to go to fullscreen mode.<br>
-					Press W to switch to native resolution.
+					Press W to switch to native resolution.<br>
+					<br>
+					<h2>ゆめにっき (Yume Nikki)</h2>
+					Yume Nikki is a freeware game developed by Kikiyama.<br>
+					You can download it here:<br>
+					<a href="https://uboachan.net/yumenikki_portable.zip">English version</a><br>
+					<a href="https://www.vector.co.jp/soft/win95/game/se332192.html">Japanese version</a><br>
+					<a href="https://store.steampowered.com/app/650700/Yume_Nikki/">Steam release (ENG/JP)</a> (NOTE: may contain bugs)<br>
+					<a href="https://www3.nns.ne.jp/~tk-mto/">Kikiyama's homepage</a><br>
 				</div>
 			</div>
 		</div>
@@ -134,8 +158,12 @@
 
 // TODO:
 // controller support
-// screen transition
-// mousehide?
+// dissolve transition when the game starts
+// mousehide
+
+// NOTE: <60hz refresh rate is not supported.
+// Game would need to be rewritten so the logic isn't tied to FPS.
+// Then it wouldn't be faithful to the original.
 
 // If the quality of this code is poor, it is solely the fault of this port's author.
 
@@ -153,9 +181,6 @@
 
 "use strict";
 
-// NOTE: <60hz refresh rate is not supported.
-// Game would need to be rewritten so the logic isn't tied to FPS.
-// Then it wouldn't be faithful to the original.
 function median(values){
 	if(values.length ===0) {
 		return 0;
@@ -546,6 +571,7 @@ function nasu_red() {
 		0, 0, 0, 0, 0, 0,																		// Zenith
 		+1, +0, +0, +0, +0, +0, +1, +0, +1, +0, +1, +0, +2, +0, +2, +0, +2, +0, +2, +0, +2, +0, // Descent
 	]
+	this.spawned = false
 	this.sprite = PIXI.Sprite.from("nasu_red")
 	set_anchor(this.sprite)
 
@@ -577,6 +603,11 @@ function nasu_red() {
 		}
 		if (that.sprite.x >= x_max) {
 			that.despawn()
+
+			if (screen_GAME.nasu_red_can_spawn) {
+				screen_GAME.nasu_red.spawn()
+				screen_GAME.nasu_red_can_spawn = false
+			}
 		}
 	}
 }
@@ -953,16 +984,19 @@ var screen_GAME = {
 	update: function() {
 		if (screen_GAME.GET_check(screen_GAME.nasu)) {
 			screen_GAME.nasu.respawn()
+			screen_GAME.nasu_red_can_spawn = true
 
 			let x = screen_GAME.hero.sprite.x
 			let y = screen_GAME.hero.sprite.y
 			screen_GAME.text_points_10.spawn(x, y)
-
 			screen_GAME.hero.double_get++
+
 			if (screen_GAME.nasu_red.spawned == false
 			&& (game_master.nasu_mode || (rand_range(1, 50) == 1))) {
-					screen_GAME.nasu_red.spawn()
+				screen_GAME.nasu_red.spawn()
+				screen_GAME.nasu_red_can_spawn = false
 			}
+
 			if (screen_GAME.hero.double_get == 2) {
 				screen_GAME.score.add(1010)
 				screen_GAME.sfx_double.play()
@@ -996,6 +1030,10 @@ var screen_GAME = {
 				screen_GAME.score.add(300)
 				screen_GAME.sfx_GET.play()
 			}
+			if (screen_GAME.nasu_red_can_spawn) {
+				screen_GAME.nasu_red.spawn()
+				screen_GAME.nasu_red_can_spawn = false
+			}
 		}
 	},
 	show: function() {
@@ -1008,6 +1046,7 @@ var screen_GAME = {
 		this.bgm.play()
 		this.nasu.spawn()
 		this.hero.spawn()
+		this.nasu_red_can_spawn = false
 		update.reg(this.update)
 	},
 	hide_text_start: function() {
