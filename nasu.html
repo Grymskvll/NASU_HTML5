@@ -3,44 +3,140 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-	<!-- <title>nasu</title> -->
+	<title>NASU</title>
+	<link rel="icon" 
+      type="image/png" 
+      href="favicon.png">
 </head>
 <style>
-	canvas {
-		border:1px solid #d3d3d3;
-		/* background-color: #FFF; */
-		padding: 0;
-		margin: auto;
-		display: block;
-		position: absolute;
-		top: 0;
-		bottom: 0;
-		left: 0;
-		right: 0;
-	}
 	body {
 		background-color: #000;
-		color: #CC0000;
 		font-size: 10pt;
 		font-family: "Courier New",Courier,mono;
+		margin: 0;
+	}
+	#main_content {
+		height: calc(100vh - 25px);
+		min-height: 240px;
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		/* box-sizing: border-box;
+		border: 1px solid #CC0000; */
+	}
+	/* #main_content:hover {
+		border: 1px solid white;
+	} */
+	#rest {
+		top: 100vh;
+		width: 100%;
+	}
+	#info {
+		max-width: 460px;
+		margin-left: auto;
+		margin-right: auto;
+		margin-bottom: 40px;
+	}
+	#info_heady {
+		border-radius: 15px 15px 0px 0px;
+		background: #CC0000;
+		height: 25px;
+		text-align: center;
+		font-size: 24px;
+		color: #d98787;
+	}
+	#info_body {
+		border: 2px solid #CC0000;
+		border-radius: 0px 0px 5px 5px;
+	}
+	#texto {
+		color: #CC0000;
+		padding: 20px;
+	}
+	#family_game, #instructions {
+		display: block;
+		margin-left: auto;
+		margin-right: auto;
+		margin-top: 40px;
+		margin-bottom: 20px;
+	}
+	h2 {
+		margin: 0px;
+	}
+	#footy_col_1 {
+		height: 100px;
+		background-color: #a9004f;
+	}
+	/* #footy_col_2 {
+		height: 20px;
+		background-color: #4f001f;
+	}
+	#footy_col_3 {
+		height: 20px;
+		background-color: #300000;
+	} */
+	#footy_col_4 {
+		height: 20px;
+		background-color: #1c071c;
+	}
+	#working {
+		position: absolute;
 	}
 </style>
 <body>
-	This is an unofficial port of the mini-game NASU included in the game ゆめにっき (Yume Nikki).<br>
-	This version is intended to be as faithful to the original as possible, except for the following fixes:
-	<ul>
-		<li>The red bonus eggplant should no longer sometimes be invisible.</li>
-		<li>The player-character should no longer sometimes seem to stumble and move slowly.</li>
-		<li>Inputs should no longer be lost if you press several buttons at the same time.</li>
-	</ul>
+	<div id="main_content" tabindex="1">
+		<noscript>
+			<div style="border: 1px solid purple; padding: 10px">
+				<span style="color:red">JavaScript is required for the game to function.</span>
+			</div>
+		</noscript>
+		<img id="working" src="Picture/サウンド調整.png">
+	</div>
+
+	<div id="rest">
+		<div id="info">
+			<div id="info_heady">▼</div>
+			<div id="info_body">
+				<img id="family_game" src="ファミゲーメニュ.png">
+				<img id="instructions" src="ファミゲー「なす」説明.png">
+				<div id="texto">
+					<h2>About</h2>
+						This is an unofficial port of the mini-game NASU included in the game ゆめにっき (Yume Nikki).<br>
+						This version is intended to be as faithful to the original as possible, except for the following fixes:
+					<ul>
+						<li>The red bonus eggplant should no longer sometimes be invisible.</li>
+						<li>The hero should no longer sometimes seem to stumble and move slowly.</li>
+						<li>Inputs should no longer be lost if you press several buttons at the same time.</li>
+					</ul>
+					Press F or double-click to go to fullscreen mode.<br>
+					Press W to switch to native resolution.
+				</div>
+			</div>
+		</div>
+	
+		<div id="footy">
+			<div id="footy_col_1"></div>
+			<!-- <div id="footy_col_2"></div>
+			<div id="footy_col_3"></div> -->
+			<div id="footy_col_4"></div>
+		</div>
+	</div>
+
 </body>
+
+
 
 <script src="pixi.min.js"></script>
 <script src="pixi-sound.js"></script>
 
 
-
 <script>
+
+// TODO:
+// controller support
+// screen transition
+// mousehide?
+
 // If the quality of this code is poor, it is solely the fault of this port's author.
 
 //  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄         ▄ 
@@ -57,6 +153,55 @@
 
 "use strict";
 
+// NOTE: <60hz refresh rate is not supported.
+// Game would need to be rewritten so the logic isn't tied to FPS.
+// Then it wouldn't be faithful to the original.
+function median(values){
+	if(values.length ===0) {
+		return 0;
+	}
+
+	values.sort(function(a,b){
+		return a-b;
+	});
+
+	var half = Math.floor(values.length / 2);
+
+	if (values.length % 2){
+		return values[half];
+	} else {
+		return (values[half - 1] + values[half]) / 2.0;
+	}
+}
+
+function avg_fps(callback, count=60) {
+	let timings = []
+	var then = 0
+	function cute_doggy(now) {
+		timings.push(now - then)
+		then = now
+		
+		if (count--) {
+			window.requestAnimationFrame(cute_doggy)
+		} else {
+			let fps = 1000 / median(timings)
+			callback(fps)
+		}
+	}
+	window.requestAnimationFrame(function(now) {
+		then = now;
+		window.requestAnimationFrame(cute_doggy)
+	})
+}
+
+function check_fps(fps) {
+	var tolerance = 5
+	var goal_fps = 60
+	if (fps > (goal_fps + tolerance)) {
+		app.ticker.maxFPS = goal_fps
+	}
+}
+
 PIXI.settings.SCALE_MODE = 0
 const VOLUME_SCALE = 0.2
 const COOKIE_EXP = 10000
@@ -67,8 +212,9 @@ const app = new PIXI.Application({
 	height:	Y_RES_NATIVE,
 	backgroundColor: 0x000000,
 });
-document.body.appendChild(app.view);
-// app.ticker.maxFPS = 60		// FIXME: 
+avg_fps(check_fps)
+const HOLDER = document.getElementById("main_content")
+HOLDER.appendChild(app.view)
 
 
 function setCookie(cname, cvalue, exdays) {
@@ -209,12 +355,12 @@ var game_master = {
 		this.high_score = Number(getCookie(this.cookie_name))
 		this.toggle_native_res()
 		key_man.reg(KEY.PRESS, function(key_code) {
-			if (key_code == 70) { game_master.toggle_native_res() }
-			else if (key_code == 82) { game_master.toggle_fullscreen() }
+			if (key_code == 87) { game_master.toggle_native_res() }
+			else if (key_code == 70) { game_master.toggle_fullscreen() }
 		})
 		window.onresize = this.update_res
 
-		app.view.addEventListener('dblclick', function (e) {
+		HOLDER.addEventListener('dblclick', function (e) {
 			game_master.toggle_fullscreen()
 		});
 	},
@@ -226,8 +372,8 @@ var game_master = {
 		}
 	},
 	update_scale_max: function() {
-		let c_width		= document.documentElement.clientWidth
-		let c_height	= document.documentElement.clientHeight
+		let c_width		= HOLDER.offsetWidth
+		let c_height	= HOLDER.offsetHeight
 		let max_scale_x	= Math.floor(c_width/X_RES_NATIVE)
 		let max_scale_y	= Math.floor(c_height/Y_RES_NATIVE)
 		let max_scale	= Math.min(max_scale_x, max_scale_y)
@@ -240,16 +386,15 @@ var game_master = {
 		app.stage.scale.y = scale
 		let w = X_RES_NATIVE * scale
 		let h = Y_RES_NATIVE * scale
-		app.renderer.resize(w, h)	// FIXME:
+		app.renderer.resize(w, h)
 	},
 	toggle_native_res: function() {
 		game_master.scale_native = !game_master.scale_native
 		game_master.update_res()
 	},
 
-	// FIXME:
 	toggle_fullscreen: function() {
-  		let elem = document.body
+  		let elem = HOLDER
 		if (!document.fullscreenElement) {
 			elem.requestFullscreen().catch(err => {
 			alert(`Error attempting to enable full-screen mode: ${err.message} (${err.name})`);
@@ -569,7 +714,6 @@ function hero() {
 	}
 
 	this._update_moving = function() {
-		// Horizontal movement
 		if (key_man.keys) {
 			if (key_man.keys[39]) {	// Right check (override Left check)
 				that.moving_left = false
@@ -590,7 +734,6 @@ function hero() {
 	}
 
 	this._update_jumping = function() {
-		// Jump movement
 		if (that.jumping == true) {
 			that.y_speed = jump_sequence[that.jump_frame]
 			that.jump_frame++
@@ -606,7 +749,6 @@ function hero() {
 	}
 
 	this._update_facing = function() {
-		// Facing
 		let new_facing
 		if (that.moving == false || that.jumping) {
 			new_facing = that.facing_left
@@ -946,7 +1088,7 @@ var screen_GAME_OVER = {
 }
 
 
-const KEY = {	// enum
+const KEY = {	// ? :)
 	PRESS: "PRESS",
 	DOWN: "DOWN",
 	UP: "UP",
@@ -957,6 +1099,7 @@ var key_man = {
 //	 / \
 	keys:		[],
 	pending:	{},
+	captured:	{},
 	handlers: {				// key_man refuses to use switch stataments.
 		[KEY.PRESS]:	[],	// He finds them unaesthetic.
 		[KEY.DOWN]:		[],
@@ -964,8 +1107,8 @@ var key_man = {
 	},
 
 	init: function() {
-		window.addEventListener('keydown', this._down)
-		window.addEventListener('keyup', this._up)
+		HOLDER.addEventListener('keydown', this._down)
+		HOLDER.addEventListener('keyup', this._up)
 	},
 	reg: function(event, handler) {
 		if (!this.handlers[event].includes(handler)) {
@@ -990,6 +1133,9 @@ var key_man = {
 			}
 		}
 		key_man.pending[e.keyCode] = true
+		if (key_man.captured[e.keyCode]) {
+			e.preventDefault();
+		}
 	},
 	_up: function(e) {
 		key_man.pending[e.keyCode] = null
@@ -998,11 +1144,19 @@ var key_man = {
 			key_man.handlers[KEY.UP][i](e.keyCode)
 		}
 	},
+	capture: function(key_code) {
+		this.captured[key_code] = true
+	},
 }
 
 
 function onAssetsLoaded() {
+	document.getElementById("working").style.display = "none"
+
 	key_man.init()
+	let captured = [13, 32, 37, 38, 39, 40, 88, 90]
+	captured.map((key_code) => key_man.capture(key_code))
+
 	game_master.init()
 
 	screen_TITLE.init()
@@ -1039,6 +1193,7 @@ function make_update() {
 	return update
 }
 var update = make_update()
+
 
 </script>
 </html>
