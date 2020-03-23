@@ -126,6 +126,7 @@
 					</ul>
 					Press F or double-click to go to fullscreen mode.<br>
 					Press W to switch to native resolution.<br>
+					Currently, only keyboard controls are supported because I don't have a working gamepad.<br>
 					<br>
 					<h2>ゆめにっき (Yume Nikki)</h2>
 					Yume Nikki is a freeware game developed by Kikiyama.<br>
@@ -133,6 +134,8 @@
 					<a href="https://uboachan.net/yumenikki_portable.zip">English version</a><br>
 					<a href="https://www.vector.co.jp/soft/win95/game/se332192.html">Japanese version</a><br>
 					<a href="https://store.steampowered.com/app/650700/Yume_Nikki/">Steam release (ENG/JP)</a> (NOTE: may contain bugs)<br>
+					<br>
+					See also:<br>
 					<a href="https://www3.nns.ne.jp/~tk-mto/">Kikiyama's homepage</a><br>
 				</div>
 			</div>
@@ -166,6 +169,7 @@
 // Then it wouldn't be faithful to the original.
 
 // If the quality of this code is poor, it is solely the fault of this port's author.
+// Trigger warning: spaghetti
 
 //  ▄▄        ▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄▄▄▄▄▄▄▄▄▄▄  ▄         ▄ 
 // ▐░░▌      ▐░▌▐░░░░░░░░░░░▌▐░░░░░░░░░░░▌▐░▌       ▐░▌
@@ -220,6 +224,9 @@ function avg_fps(callback, count=60) {
 }
 
 function check_fps(fps) {
+	// Setting maxFPS to 60 will result on stuttering on a 60hz monitor.
+	// Consequently we first measure the window's framerate.
+	// If we think it's a >60hz monitor, we limit the framerate.
 	var tolerance = 5
 	var goal_fps = 60
 	if (fps > (goal_fps + tolerance)) {
@@ -237,7 +244,7 @@ const app = new PIXI.Application({
 	height:	Y_RES_NATIVE,
 	backgroundColor: 0x000000,
 });
-avg_fps(check_fps)
+avg_fps(check_fps)		// Start measuring FPS as soon as possible.
 const HOLDER = document.getElementById("main_content")
 HOLDER.appendChild(app.view)
 
@@ -604,10 +611,11 @@ function nasu_red() {
 		if (that.sprite.x >= x_max) {
 			that.despawn()
 
-			if (screen_GAME.nasu_red_can_spawn) {
-				screen_GAME.nasu_red.spawn()
-				screen_GAME.nasu_red_can_spawn = false
-			}
+			// // FIXME: red always* spawns
+			// if (screen_GAME.nasu_red_can_spawn) {
+			// 	screen_GAME.nasu_red.spawn()
+			// 	screen_GAME.nasu_red_can_spawn = false
+			// }
 		}
 	}
 }
@@ -984,18 +992,20 @@ var screen_GAME = {
 	update: function() {
 		if (screen_GAME.GET_check(screen_GAME.nasu)) {
 			screen_GAME.nasu.respawn()
-			screen_GAME.nasu_red_can_spawn = true
+			// screen_GAME.nasu_red_can_spawn = true
 
 			let x = screen_GAME.hero.sprite.x
 			let y = screen_GAME.hero.sprite.y
 			screen_GAME.text_points_10.spawn(x, y)
 			screen_GAME.hero.double_get++
 
-			if (screen_GAME.nasu_red.spawned == false
-			&& (game_master.nasu_mode || (rand_range(1, 50) == 1))) {
-				screen_GAME.nasu_red.spawn()
-				screen_GAME.nasu_red_can_spawn = false
-			}
+			// if (screen_GAME.nasu_red.spawned == false
+			// && (game_master.nasu_mode || (rand_range(1, 50) == 1))) {
+				// screen_GAME.nasu_red.spawn()
+				// screen_GAME.nasu_red_can_spawn = false
+			// }
+			if (game_master.nasu_mode || (rand_range(1, 50) == 1))
+				screen_GAME.nasu_red_can_spawn = true
 
 			if (screen_GAME.hero.double_get == 2) {
 				screen_GAME.score.add(1010)
@@ -1030,10 +1040,16 @@ var screen_GAME = {
 				screen_GAME.score.add(300)
 				screen_GAME.sfx_GET.play()
 			}
-			if (screen_GAME.nasu_red_can_spawn) {
-				screen_GAME.nasu_red.spawn()
-				screen_GAME.nasu_red_can_spawn = false
-			}
+			// if (screen_GAME.nasu_red_can_spawn) {
+			// 	screen_GAME.nasu_red.spawn()
+			// 	screen_GAME.nasu_red_can_spawn = false
+			// }
+		}
+
+		if (screen_GAME.nasu_red.spawned == false
+		&& screen_GAME.nasu_red_can_spawn) {
+			screen_GAME.nasu_red.spawn()
+			screen_GAME.nasu_red_can_spawn = false
 		}
 	},
 	show: function() {
