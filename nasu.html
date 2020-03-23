@@ -162,7 +162,6 @@
 // TODO:
 // controller support
 // dissolve transition when the game starts
-// mousehide
 
 // NOTE: <60hz refresh rate is not supported.
 // Game would need to be rewritten so the logic isn't tied to FPS.
@@ -1204,6 +1203,30 @@ var key_man = {
 	},
 }
 
+function mouse_timeout() {
+    var mouseTimer = null, cursorVisible = true;
+
+    function disappearCursor() {
+        mouseTimer = null;
+        document.body.style.cursor = "none";
+        cursorVisible = false;
+    }
+
+    HOLDER.onmousemove = function() {
+        if (mouseTimer) {
+            window.clearTimeout(mouseTimer);
+        }
+        if (!cursorVisible) {
+            document.body.style.cursor = "";
+            cursorVisible = true;
+        }
+        mouseTimer = window.setTimeout(disappearCursor, 2000);
+	};
+	HOLDER.onmouseleave = function() {
+		window.clearTimeout(mouseTimer);
+	}
+}
+
 
 function onAssetsLoaded() {
 	document.getElementById("working").style.display = "none"
@@ -1226,6 +1249,7 @@ function onAssetsLoaded() {
 	app.stage.sortableChildren = true
 
 	app.ticker.add(update)
+	mouse_timeout()
 }
 
 
